@@ -16,7 +16,9 @@ from transformers import (
 	XLNetConfig,      XLNetModel,      XLNetTokenizer,
 	RobertaConfig,    RobertaModel,    RobertaTokenizer,
 	DistilBertConfig, DistilBertModel, DistilBertTokenizer,
-	AlbertConfig,     AlbertModel,     AlbertTokenizer
+	AlbertConfig,     AlbertModel,     AlbertTokenizer,
+	FlaubertConfig,   FlaubertModel,   FlaubertTokenizer,
+	CamembertConfig,  CamembertModel,  CamembertTokenizer
 )
 
 from simplerepresentations.input_example import InputExample
@@ -26,7 +28,7 @@ from simplerepresentations.utils import examples_to_dataset
 class RepresentationModel:
 	COMBINATION_METHODS = ['sum', 'cat']
 	MODELS_W_SENREP = ['bert', 'roberta', 'albert']
-	MODELS_WO_SENREP = ['xlm', 'xlnet', 'distilbert']
+	MODELS_WO_SENREP = ['xlm', 'xlnet', 'distilbert', 'flaubert']
 	MODEL_CLASSES = {
 		'bert':       (BertConfig,       BertModel,       BertTokenizer),
 		'xlm':        (XLMConfig,        XLMModel,        XLMTokenizer),
@@ -34,6 +36,8 @@ class RepresentationModel:
 		'roberta':    (RobertaConfig,    RobertaModel,    RobertaTokenizer),
 		'distilbert': (DistilBertConfig, DistilBertModel, DistilBertTokenizer),
 		'albert':     (AlbertConfig,     AlbertModel,     AlbertTokenizer),
+		'flaubert':   (FlaubertConfig,   FlaubertModel,   FlaubertTokenizer),
+		'camembert':  (CamembertConfig,  CamembertModel,  CamembertTokenizer),
 	}
 
 
@@ -109,26 +113,33 @@ class RepresentationModel:
 			with torch.no_grad():
 				inputs = self._get_inputs_dict(batch)
 
-				if self.model_type in self.MODELS_W_SENREP:
-					_, sentences_representations, tokens_representations = self.model(**inputs)
-
+				if self.model_type in ["flaubert", "camembert"]:
+					sentences_representations = self.model(inputs["input_ids"])[0][:, 0, :]
 					sentences_representations = np.array([sentences_representation.cpu().numpy() for sentences_representation in sentences_representations])
 					all_sentences_representations.extend(sentences_representations)
-				elif self.model_type in self.MODELS_WO_SENREP:
-					_, tokens_representations = self.model(**inputs)
 
-				tokens_representations = np.array([tokens_representation.cpu().numpy() for tokens_representation in tokens_representations]).transpose(1, 2, 0, 3)
-				for tokens_representation in tokens_representations:
-					if self.combination_method == 'sum':
-						final_tokens_representation = np.array([np.sum(np.stack(layer)[-self.last_hidden_to_use:], 0) for layer in tokens_representation])
-					elif self.combination_method == 'cat':
-						final_tokens_representation = np.array([np.concatenate(tuple(layer[-self.last_hidden_to_use:])) for layer in tokens_representation])
-					all_tokens_representations.append(final_tokens_representation)
+				# if self.model_type in self.MODELS_W_SENREP:
+				# 	_, sentences_representations, tokens_representations = self.model(**inputs)
 
-		if self.model_type in self.MODELS_W_SENREP:
-			return np.array(all_sentences_representations), np.array(all_tokens_representations)
-		elif self.model_type in self.MODELS_WO_SENREP:
-			return np.array(all_tokens_representations)
+				# 	sentences_representations = np.array([sentences_representation.cpu().numpy() for sentences_representation in sentences_representations])
+				# 	all_sentences_representations.extend(sentences_representations)
+				# elif self.model_type in self.MODELS_WO_SENREP:
+				# 	_, tokens_representations = self.model(**inputs)
+
+				# tokens_representations = np.array([tokens_representation.cpu().numpy() for tokens_representation in tokens_representations]).transpose(1, 2, 0, 3)
+				# for tokens_representation in tokens_representations:
+				# 	if self.combination_method == 'sum':
+				# 		final_tokens_representation = np.array([np.sum(np.stack(layer)[-self.last_hidden_to_use:], 0) for layer in tokens_representation])
+				# 	elif self.combination_method == 'cat':
+				# 		final_tokens_representation = np.array([np.concatenate(tuple(layer[-self.last_hidden_to_use:])) for layer in tokens_representation])
+				# 	all_tokens_representations.append(final_tokens_representation)
+
+		return np.array(all_sentences_representations)
+
+		# if self.model_type in self.MODELS_W_SENREP:
+		# 	return np.array(all_sentences_representations), np.array(all_tokens_representations)
+		# elif self.model_type in self.MODELS_WO_SENREP:
+		# 	return np.array(all_tokens_representations)
 
 
 	def _get_inputs_dict(self, batch):
